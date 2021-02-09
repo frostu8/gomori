@@ -18,8 +18,16 @@ const _GOMORI_Scene_OmoriTitleScreen_create = Scene_OmoriTitleScreen.prototype.c
 Scene_OmoriTitleScreen.prototype.create = function() {
 	this.createModsOptionsWindow();
 	_GOMORI_Scene_OmoriTitleScreen_create.call(this);
+    this.createLogWarning();
 	this._optionsWindowsContainer.addChild(this._modsOptionsWindow);
 };
+
+Scene_OmoriTitleScreen.prototype.createLogWarning = function() {
+	this._logWarning = new Sprite(new Bitmap(Graphics.boxWidth, 32));
+    this.addChild(this._logWarning);
+    this._logWarning.position.set(0, Graphics.boxHeight - 32);
+    this._logWarning.bitmap.fontSize = 24;
+}
 
 Scene_OmoriTitleScreen.prototype.createModsOptionsWindow = function() {
 	// Create System Option Window
@@ -27,3 +35,16 @@ Scene_OmoriTitleScreen.prototype.createModsOptionsWindow = function() {
 	this._modsOptionsWindow.setHandler('cancel', this.onOptionWindowCancel.bind(this));
 	this._modsOptionsWindow.visible = false;
 };
+
+const _GOMORI_Scene_OmoriTitleScreen_update = Scene_OmoriTitleScreen.prototype.update;
+Scene_OmoriTitleScreen.prototype.update = function() {
+    _GOMORI_Scene_OmoriTitleScreen_update.call(this);
+
+    // update the log warning text
+    let errorCount = $modLoader.logger.errorCount();
+    if (errorCount > 0) {
+        this._logWarning.bitmap.clear();
+        this._logWarning.bitmap.drawText(`${errorCount} errors have been logged. See log.txt for more.`, 4, 4, this._logWarning.bitmap.width, 16, "left");
+    }
+}
+

@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 class ModLoader {
-	constructor(plugins, Decrypter) {
+	constructor(plugins, Decrypter, logger) {
 		this.plugins = plugins;
 		this.Decrypter = Decrypter;
 		this.assetEncryptionKey = null;
@@ -16,6 +16,7 @@ class ModLoader {
 		this.mods = new Map();
 		this._config = null;
 		this.deltaPlugins = new Map();
+        this.logger = logger;
 	}
 
 	loadAssetEncryptionKey () {
