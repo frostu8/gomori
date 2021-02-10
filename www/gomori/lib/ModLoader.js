@@ -3,11 +3,14 @@ const { defaultConfig } = require("../constants/defaults");
 const { exists, read, write, readDir } = require("../utils/fs");
 const { decryptBuffer } = require("../utils/encryption");
 
+const Logger = require("../log/Logger");
+const LogLevel = require("../log/LogLevel");
+
 const fs = require("fs");
 const path = require("path");
 
 class ModLoader {
-	constructor(plugins, Decrypter, logger) {
+	constructor(plugins, Decrypter) {
 		this.plugins = plugins;
 		this.Decrypter = Decrypter;
 		this.assetEncryptionKey = null;
@@ -16,7 +19,8 @@ class ModLoader {
 		this.mods = new Map();
 		this._config = null;
 		this.deltaPlugins = new Map();
-        this.logger = logger;
+
+        this._createLogger();
 	}
 
 	loadAssetEncryptionKey () {
@@ -140,6 +144,24 @@ class ModLoader {
 		if (!this._config._basilFiles) this._config._basilFiles = [];
 		return this._config;
 	}
+
+    _createLogger() {
+        const logFolder = path.join(path.dirname(process.mainModule.filename), 'log');
+
+        if (!exists(logFolder)) {
+            // make log folder
+            fs.mkdirSync(logFolder);
+        } else {
+            // make sure the log folder isn't a file
+            if (!fs.statSync(logFolder).isDirectory()) throw new Error('log/ is a file!');
+        }
+
+        // write a new log file
+        const date = new Date();
+        const logFile = path.join(logFolder, `${date.getFullYear()}-${date.getMonth()}-${date.getDate()} ${date.getHours()}-${date.getMinutes()}-${date.getSeconds()}.txt`);
+
+        this.logger = new Logger(logFile, LogLevel.INFO);
+    }
 }
 
 module.exports = ModLoader;

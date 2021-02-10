@@ -2,15 +2,9 @@ let $modLoader = null;
 
 (() => {
 	try {
-        // initialize logger
-        const Logger = require('./gomori/log/Logger');
-        const LogLevel = require('./gomori/log/LogLevel');
-
-        const logger = new Logger('log.txt', LogLevel.INFO);
-
 		const ModLoader = require("./gomori/lib/ModLoader");
 
-		const modLoader = new ModLoader(window.$plugins, window.Decrypter, logger);
+		const modLoader = new ModLoader(window.$plugins, window.Decrypter);
 		$modLoader = modLoader;
 		modLoader.loadAssetEncryptionKey();
 		modLoader.injectCode(window);
