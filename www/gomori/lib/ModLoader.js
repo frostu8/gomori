@@ -1,29 +1,45 @@
 const Mod = require("./Mod");
+const Crypto = require('./Crypto');
 const { defaultConfig } = require("../constants/defaults");
 const { exists, read, write, readDir } = require("../utils/fs");
 const { decryptBuffer } = require("../utils/encryption");
 
 const fs = require("fs");
-const path = require("path");
+const path = require("path/posix");
 
+/**
+ * The GOMORI `ModLoader`.
+ *
+ * The `ModLoader` class is the supervisor of all modding activity done in
+ * GOMORI. It is not only responsible for loading mods, but also providing
+ * utilities to mods.
+ *
+ * # Staging
+ * Mod patching is done in a set of stages.
+ *
+ * ## `load` stage
+ * The load stage is responsible for loading mods and their metadata before
+ * preforming interactions on them to ensure that each mod can access every
+ * other mod.
+ *
+ * ## `build` stage
+ * The build stage is responsible for preparing files for patching.
+ *
+ * ## `unpatch` stage
+ * The unpatch stage unpatches BASIL files and prepares a vanilla copy of the
+ * game for clean patches.
+ *
+ * ## `patch` stage
+ * The patch stage actually applies the modifications to the game.
+ */
 class ModLoader {
 	constructor(plugins, Decrypter) {
 		this.plugins = plugins;
-		this.Decrypter = Decrypter;
-		this.assetEncryptionKey = null;
-		this.conflictFiles = new Set();
-		this.deltaFiles = new Set();
-		this.mods = new Map();
-		this._config = null;
-		this.deltaPlugins = new Map();
-	}
 
-	loadAssetEncryptionKey () {
-		const encryptedSystem = read("data/System.KEL");
-		const system = JSON.parse(decryptBuffer(encryptedSystem).toString());
-		const keyHexStrings = system.encryptionKey.split(/(.{2})/).filter(Boolean);
-		const keyBytes = keyHexStrings.map(hexString => parseInt(hexString, 16));
-		this.assetEncryptionKey = Buffer.from(keyBytes);
+        this.crypto = new Crypto(Decrypter);
+
+		this.mods = [];
+        this.modsDir = path.join(path.dirname(process.mainModule.filename), 'mods');
 	}
 
 	/**
@@ -31,60 +47,90 @@ class ModLoader {
 	 */
 	injectCode(window) {
 		//These are code overrides, which are used for injecting delta patches into plugins
-		const modLoader = this;
-		const doc = window.document;
-		window.PluginManager = class extends window.PluginManager {
-			static loadScript(name) {
-				try {
-				if(name.includes("vorbis")) {return super.loadScript(name)}
-				name = name.replace(".js", ".OMORI").replace(".JS", ".OMORI");
-				var base = path.dirname(process.mainModule.filename);
-				let buff = fs.readFileSync(base + "/" + this._path + name);
-				var url = this._path + name;
-				var script = doc.createElement('script');
-				script.type = 'text/javascript';
+		//const modLoader = this;
+		//const doc = window.document;
+		//window.PluginManager = class extends window.PluginManager {
+		//	static loadScript(name) {
+		//		try {
+		//		if(name.includes("vorbis")) {return super.loadScript(name)}
+		//		name = name.replace(".js", ".OMORI").replace(".JS", ".OMORI");
+		//		var base = path.dirname(process.mainModule.filename);
+		//		let buff = fs.readFileSync(base + "/" + this._path + name);
+		//		var url = this._path + name;
+		//		var script = doc.createElement('script');
+		//		script.type = 'text/javascript';
 
-				//Delta loading code
-				let delta = "\n";
-				{
-					const fullPath = this._path + name.replace(".js", ".OMORI").replace(".JS", ".OMORI");
-					if (modLoader.deltaPlugins.has(fullPath)) {
-						for (const patch of modLoader.deltaPlugins.get(fullPath)) {
-							delta += patch.read().toString() + "\n";
-						}
-					}
-				}
+		//		//Delta loading code
+		//		let delta = "\n";
+		//		{
+		//			const fullPath = this._path + name.replace(".js", ".OMORI").replace(".JS", ".OMORI");
+		//			if (modLoader.deltaPlugins.has(fullPath)) {
+		//				for (const patch of modLoader.deltaPlugins.get(fullPath)) {
+		//					delta += patch.read().toString() + "\n";
+		//				}
+		//			}
+		//		}
 
-				script.innerHTML = decryptBuffer(buff).toString() + delta;
-				script._url = url;
-				doc.body.appendChild(script);
-				} catch (err) {
-					alert(`${err.stack}`);
-				}
-			}
-		}
+		//		script.innerHTML = decryptBuffer(buff).toString() + delta;
+		//		script._url = url;
+		//		doc.body.appendChild(script);
+		//		} catch (err) {
+		//			alert(`${err.stack}`);
+		//		}
+		//	}
+		//}
 	}
 
 	loadMods() {
-		const mods = readDir("mods");
-		for (const modDir of mods) {
-			const isZip = modDir.endsWith(".zip");
-			const id = modDir.replace(".zip", "");
-			if (id.startsWith("_")) continue;
+		const mods = readDir(this.modsDir);
 
-			if (this.mods.has(id)) {
-				alert(`Cannot load mod "${modDir}" for having a conflicting ID.`);
-				continue;
-			}
+		for (const basename of mods) {
+            // skip any file or folder prefixed with an underscore, for marking
+            // files that a user does not want to be interpreted as a mod.
+            if (basename.startsWith("_")) continue;
 
-			const mod = new Mod(this, id, isZip);
-			this.mods.set(id, mod);
-			mod.load();
+            // full path of the mod
+            const fullPath = path.join(this.modsDir, basename);
+
+            // the id of the mod
+            let id = basename;
+            // a flag for if we need to interpret this as a zip file
+            let zip = false;
+
+            if (id.endsWith(".zip")) {
+                // strip .zip off of id and set zip flag
+                id = id.slice(0, -4);
+                zip = true;
+            }
+
+            if (this.mods.some(mod => mod.id == id)) {
+                alert(`Cannot load mod "${modDir}" for having a conflicting ID.`);
+                continue;
+            } 
+
+            const mod = new Mod(this, id);
+
+            // catch any errors that happen during the loading process
+            try {
+                if (zip) {
+                    mod.openZip(fullPath);
+                } else {
+                    mod.openFs(fullPath);
+                }
+
+                // load mod
+                mod.load();
+
+                this.mods.push(mod);
+            } catch (err) {
+                // oops! error happened during loading
+                alert(`${err.stack}`);
+            }
 		}
 	}
 
 	buildMods() {
-		for (const mod of this.mods.values()) {
+		for (const mod of this.mods) {
 			try {
 				mod.build();
 			} catch (err) {
@@ -95,41 +141,25 @@ class ModLoader {
 
 	unpatchMods() {
 		for (const file of this.config._basilFiles) {
-			if (!exists(file)) continue;
+			if (!fs.existsSync(file)) continue;
 
-			const basilBuf = read(file);
-			write(file.replace(".BASIL", ""), basilBuf);
+			const basilBuf = fs.readFileSync(file);
+            // file.slice(0, -6) -> slice off .BASIL extension
+			fs.writeFileSync(file.slice(0, -6), basilBuf);
 		}
 
-		this.config._basilFiles = [...this.conflictFiles].map(file => `${file}.BASIL`).concat([...this.deltaFiles].map(file=> `${file}.BASIL`));
 		write("save/mods.json", JSON.stringify(this.config));
 	}
 
 	patchMods() {
-		for (const mod of this.mods.values()) {
+		for (const mod of this.mods) {
 			try {
-				if (this.config[mod.id] !== false) mod.patch();
+                mod.patch();
 			} catch (err) {
 				alert(`Failed to patch mod "${mod.id}": ${err.stack}`);
 			}
 		}
 	}
-
-	fileConflictCheck(filePath) {
-		if (this.conflictFiles.has(filePath)) return true;
-		if (this.deltaFiles.has(filePath)) return true;
-		this.conflictFiles.add(filePath);
-		return false;
-	}
-
-	fileConflictCheckDelta(filePath) {
-		if (this.conflictFiles.has(filePath)) return true;
-		if (!this.deltaFiles.has(filePath)) {
-			this.deltaFiles.add(filePath);
-		}
-		return false;
-	}
-
 
 	get config() {
 		if (this._config) return this._config;

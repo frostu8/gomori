@@ -6,7 +6,6 @@ let $modLoader = null;
 
 		const modLoader = new ModLoader(window.$plugins, window.Decrypter);
 		$modLoader = modLoader;
-		modLoader.loadAssetEncryptionKey();
 		modLoader.injectCode(window);
 		/*
 		 * The mod loader takes every mod through 4 stages; loading -> building -> unpatching -> patching.

@@ -1,148 +1,64 @@
-const path = require("path");
-const { PROTECTED_FILES } = require("../constants/filetypes");
-const { encrypt, decryptBuffer } = require("../utils/encryption");
-const { read, write, exists, remove } = require("../utils/fs");
-const { deltaPatchYml, deltaPatchJson } = require("../utils/delta");
+const { PROTECTED_FILES } = require('../constants/filetypes');
 
+const fs = require('fs');
+const ospath = require('path/posix');
+
+/**
+ * A `ModFile` is responsible for tracking changes in the game path. A 
+ * `ModFile` is best suited for full patches of single files. If you wish to do
+ * delta patching, see `ModDeltaFile`.
+ *
+ * A BASIL file is the original, unmodified version of the patch.
+ */
 class ModFile {
-	constructor(mod, path, type) {
-		this.mod = mod;
-		this.path = path;
-		this.type = type;
-		this.isPatched = this.type.patch && exists(this.basilPath);
+    constructor(modPath, patchPath) {
+        // The decrypted file stored in a mod.
+        this.modPath = modPath;
+        // The encrypted file stored in the game directory.
+        this.patchPath = patchPath;
 
-		this.encryptedBuffer = null;
-		this.decryptedBuffer = null;
-	}
+        // The decrypted buffer of data stored in-between the `build` and
+        // `patch` phases of mods.
+        this.data = Buffer.alloc(0);
+    }
 
-	read() {
-		if (this.mod.zip) return this._readZip();
-		return read(`mods/${this.mod.id}/${this.path}`);
-	}
+    build(modfs) {
+        // if this patches a protected file, throw
+        if (PROTECTED_FILES.includes(this.patchPath))
+            throw new Error(`Cannot patch protected file ${this.patchPath}`);
 
-	_readZip() {
-		return this.mod.zip.getEntry(`${this.mod.id}/${this.path}`).getData();
-	}
+        // read the file from the mod file system
+        const file = modfs.getFile(this.modPath);
 
-	build() {
-		if (this.type.patch && PROTECTED_FILES.includes(this.patchPath)) throw new Error(`Mod ${this.mod.id} attempted to patch protected file ${this.patchPath}`);
+        if (!file) 
+            throw new Error(`Failed to read file ${this.modPath} from mod!`);
 
-		this.decryptedBuffer = this.read();
-		// Delta files don't get built, because that needs to be done during patch time.
-		if (!this.type.delta) this._buildSimple();
-		else this._buildDelta();
-	}
+        this.data = file;
+    }
 
-	_buildSimple() {
-		if (this.type.encrypted) this.encryptedBuffer = encrypt(this.decryptedBuffer, this.unpatchedEncryptedBuffer);
-		else this.encryptedBuffer = this.decryptedBuffer;
-	}
+    patch(crypto) {
+        // attempt to encrypt
+        // TODO: proper encryption
+        const encryptedData = crypto.steamEncrypt(this.data);
 
-	_buildDelta() {
-		if (this.type.decrypted == "jsd") {
-			const deltaMap = this.mod.modLoader.deltaPlugins;
-			if (!deltaMap.has(this.patchPath)) {
-				deltaMap.set(this.patchPath, new Set());
-			}
-			deltaMap.get(this.patchPath).add(this);
-		}
-	}
+        // save a basil copy if this file already exists
+        if (fs.existsSync(this.patchPath))
+            fs.copyFileSync(this.patchPath, this.basilPath);
 
-	_patchDelta() {
-		if (this.type.decrypted == "jsd") {
-			return;
-			//No need to patch .jsd files, it's done during plugin load time.
-		} else if (this.type.decrypted == "ymld") {
-			this.decryptedBuffer = deltaPatchYml(this.decryptedBuffer, decryptBuffer(this.probablyPatchedEncryptedBuffer));
-		} else if (this.type.decrypted == "jsond") {
-			this.decryptedBuffer = deltaPatchJson(this.decryptedBuffer, decryptBuffer(this.probablyPatchedEncryptedBuffer));
-		} else {
-			throw new Error(`Failed to patch file "${this.path}" for mod "${this.mod.id}": Unsupported delta file type "${this.type.decrypted}".`);
-		}
-		this.encryptedBuffer = encrypt(this.decryptedBuffer)
-	}
+        // patch over file
+        fs.writeFileSync(this.patchPath, encryptedData);
 
-	patch() {
-		if (this.type.patch && exists(this.patchPath)) write(this.basilPath, this.unpatchedEncryptedBuffer);
-		if (this.type.encrypted === "OMORI" && !this.mod.modLoader.plugins.some(({ name }) => name === this.pluginMeta.name)) this.mod.modLoader.plugins.push(this.pluginMeta);
-		if (this.type.patch) {
-			if (this.type.delta) {
-				this._patchDelta();
-			}
-			write(this.patchPath, this.encryptedBuffer);
-		}
-		if (this.type.require) {
-			try {
-				const func = this.require();
-				if (typeof func === "function") func();
-			} catch (err) {
-				throw new Error(`Failed to execute file "${this.path}" for mod "${this.mod.id}": ${err.stack}`);
-			}
-		}
-		this.isPatched = true;
-	}
+        // deallocate data to free up memory
+        this.data = Buffer.alloc(0);
+    }
 
-	require() {
-		const base = path.dirname(process.mainModule.filename);
+    get basilPath() {
+        return this.patchPath !== null ? `${this.patchPath}.BASIL` : null;
+    }
 
-		const tempFile = `exec.${this.mod.id}.${this.path.replace(/\//g, ".")}.js`;
-		write(tempFile, this.decryptedBuffer);
-		const exportData = require(`${base}/${tempFile}`);
-		remove(tempFile);
-		return exportData;
-	}
-
-	unpatch() {
-		if (!this.isPatched) return;
-		write(this.patchPath, this.unpatchedEncryptedBuffer);
-		this.isPatched = false;
-	}
-
-	get pluginMeta() {
-		return {
-			name: this.fileName.replace(`.${this.type.decrypted}`, ""),
-			status: true,
-			description: `Patched by GOMORI | Plugin file for mod "${this.mod.id}"`,
-			parameters: {},
-		}
-	}
-
-	get fileExtension() {
-		return path.extname(this.path).substring(1);
-	}
-
-	get fileName() {
-		return this.path.split("/")[this.path.split("/").length - 1];
-	}
-
-	get patchPath() {
-		let patchPath = this.path;
-
-		if (this.type.dir) patchPath = `${this.type.dir}/${this.fileName}`;
-		if (this.type.encrypted && this.type.decrypted) patchPath = patchPath.replace(`.${this.type.decrypted}`, `.${this.type.encrypted}`);
-
-		if (patchPath.startsWith("/")) patchPath = patchPath.substring(1);
-		return patchPath;
-	}
-
-	get basilPath() {
-		return `${this.patchPath}.BASIL`;
-	}
-
-	get unpatchedEncryptedBuffer() {
-		const path = this.isPatched ? this.basilPath : this.patchPath;
-		if (!exists(path)) return null;
-		return read(path);
-	}
-
-	/**
-	 * @returns The file currently present in the game's folder. This is ONLY used for DELTA patching, and SHOULD NOT used be anywhere else for stability reasons.
-	 */
-	get probablyPatchedEncryptedBuffer() {
-		const path = this.patchPath;
-		if (!exists(path)) return null;
-		return read(path);
-	}
+    get basename() {
+        return ospath.basename(this.patchPath).slice(0, -ospath.extname(this.patchPath).length);
+    }
 }
 
 module.exports = ModFile;

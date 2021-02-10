@@ -14,16 +14,9 @@
  * of file. This is binded to an instance of `Crypto` when run.
  */
 
-/**
- * @typedef {Object} CryptoResult
- *
- * @property {string} path - The resulting path of the crypt transformation.
- *
- * @property {Buffer} buffer - The resulting data of the crypt transformation.
- */
-
 const crypto = require('crypto');
-const ospath = require('path');
+const fs = require('fs');
+const ospath = require('path/posix');
 
 const ALGORITHM = "aes-256-ctr";
 
@@ -31,22 +24,22 @@ const ALGORITHM = "aes-256-ctr";
  * Stores the encryption keys used to encrypt and decrypt game files.
  */
 class Crypto {
-    constructor() {
-        this.steamKey = String(window.nw.App.argv).slice(2, -1);
+    constructor(Decrypter) {
+        this.steamKey = String(window.nw.App.argv).slice(2);
         this.rpgmvKey = this._getAssetKey();
-        this.rpgmvHeader = this._getAssetHeader();
+        this.rpgmvHeader = this._getAssetHeader(Decrypter);
     }
 
     _getAssetKey() {
-        const encryptSys = fs.readFileSync('data/System.KEL');
+        const encryptSys = fs.readFileSync('www/data/System.KEL');
         const sys = JSON.parse(this.steamDecrypt(encryptSys).toString());
 
         return parseBase64(sys.encryptionKey);
     }
 
-    _getAssetHeader() {
+    _getAssetHeader(Decrypter) {
         // RPGMV really loves to be a thorn in the bottom.
-        const { SIGNATURE: sig, VER: ver, REMAIN: rem} = window.Decrypter;
+        const { SIGNATURE: sig, VER: ver, REMAIN: rem} = Decrypter;
         const hexHeader = sig + ver + rem;
 
         return parseBase64(hexHeader);
@@ -86,6 +79,12 @@ class Crypto {
         return Buffer.concat([iv, cipher.update(buffer), cipher.final()]);
     }
 
+    /**
+     * Preforms an encryption on a FULL FILE with the rpgmv key.
+     *
+     * @param {Buffer} buffer - The source buffer.
+     * @returns {Buffer}
+     */
     assetDecrypt(buffer) {
         // drop the header, we do need no stinkin' security!
         buffer = buffer.slice(16);
@@ -98,6 +97,12 @@ class Crypto {
         return buffer;
     }
 
+    /**
+     * Preforms a decryption on a FULL FILE with the rpgmv key.
+     *
+     * @param {Buffer} buffer - The source buffer.
+     * @returns {Buffer}
+     */
     assetEncrypt(buffer) {
         // XOR decrypt and encrypt
         for (let i = 0; i < 16; i++) {
@@ -106,48 +111,6 @@ class Crypto {
 
         // re-add header
         return Buffer.concat([this.rpgmvHeader, buffer]);
-    }
-
-    /**
-     * @returns {CryptoResult}
-     */
-    decrypt(path, buffer) {
-        // get the extension
-        const ext = ospath.extname(path);
-
-        const scheme = FILE_ENCRYPTION_SCHEMES
-            .find(scheme => scheme.encrypted == ext);
-
-        if (scheme) {
-            const newPath = path.slice(0, -ext.length) + scheme.decrypted;
-
-            const newBuffer = scheme.decrypt.bind(this)(buffer);
-
-            return { path: newPath, buffer: newBuffer };
-        } else {
-            throw new Error(`scheme for .${ext} is undefined!`);
-        }
-    }
-
-    /**
-     * @returns {CryptoResult}
-     */
-    encrypt(path, buffer) {
-        // get the extension
-        const ext = ospath.extname(path);
-
-        const scheme = FILE_ENCRYPTION_SCHEMES
-            .find(scheme => scheme.decrypted == ext);
-
-        if (scheme) {
-            const newPath = path.slice(0, -ext.length) + scheme.encrypted;
-
-            const newBuffer = scheme.encrypt.bind(this)(buffer);
-
-            return { path: newPath, buffer: newBuffer };
-        } else {
-            throw new Error(`scheme for .${ext} is undefined!`);
-        }
     }
 }
 
@@ -205,3 +168,5 @@ const FILE_ENCRYPTION_SCHEMES = [
         decrypt: Crypto.prototype.assetDecrypt,
     }
 ]
+
+module.exports = Crypto;
