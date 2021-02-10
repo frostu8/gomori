@@ -1,4 +1,4 @@
-const AdmZip = require('../../adm-zip-0.5.1/adm-zip');
+const AdmZip = require('../../../adm-zip-0.5.1/adm-zip');
 
 const ModFs = require('./ModFs');
 
