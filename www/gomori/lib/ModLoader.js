@@ -2,8 +2,8 @@ const Mod = require("./Mod");
 const PatchManager = require('./PatchManager');
 const Crypto = require('./Crypto');
 const { defaultConfig } = require("../constants/defaults");
-const { exists, read, write, readDir } = require("../utils/fs");
-const { decryptBuffer } = require("../utils/encryption");
+
+const { expand, CONFIG_PATH } = require('../utils');
 
 const fs = require("fs");
 const path = require("path/posix");
@@ -40,7 +40,7 @@ class ModLoader {
         this.crypto = new Crypto(Decrypter);
 
 		this.mods = [];
-        this.modsDir = path.join(path.dirname(process.mainModule.filename), 'mods');
+        this.modsDir = expand('mods/');
 
         this.patchManager = new PatchManager();
 	}
@@ -85,7 +85,7 @@ class ModLoader {
 	}
 
 	loadMods() {
-		const mods = readDir(this.modsDir);
+		const mods = fs.readdirSync(this.modsDir);
 
 		for (const basename of mods) {
             // skip any file or folder prefixed with an underscore, for marking
@@ -156,7 +156,7 @@ class ModLoader {
 			fs.writeFileSync(file.slice(0, -6), basilBuf);
 		}
 
-		write("save/mods.json", JSON.stringify(this.config));
+		fs.writeFileSync(CONFIG_PATH, JSON.stringify(this.config));
 	}
 
 	patchMods() {
@@ -180,8 +180,9 @@ class ModLoader {
 	get config() {
 		if (this._config) return this._config;
 
-		if (!exists("save/mods.json")) write("save/mods.json", JSON.stringify(defaultConfig));
-		this._config = JSON.parse(read("save/mods.json").toString());
+		if (!fs.existsSync(CONFIG_PATH)) 
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaultConfig));
+		this._config = JSON.parse(fs.readFileSync(CONFIG_PATH).toString());
 		if (!this._config._basilFiles) this._config._basilFiles = [];
 		return this._config;
 	}

@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { absPath } = require('../../utils');
+const { expand } = require('../../utils');
 
 /**
  * A patch. All patches implement this class.
@@ -26,8 +26,8 @@ class Patch {
      * one was created.
      */
     createUnpatch() {
-        const path = absPath(this.path);
-        const basilPath = absPath(this.basilPath);
+        const path = expand(this.path);
+        const basilPath = expand(this.basilPath);
 
         // if it exists, copy the old file into a `.BASIL` file.
         if (fs.existsSync(path)) {
@@ -47,7 +47,7 @@ class Patch {
      * @param {Crypto} crypto - Functions for encryption and decryption.
      */
     patch(crypto) {
-        const path = absPath(this.path);
+        const path = expand(this.path);
 
         fs.writeFileSync(path, this.data);
 

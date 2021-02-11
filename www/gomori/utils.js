@@ -2,8 +2,10 @@ const pathop = require('path');
 
 const WWW_DIR = pathop.dirname(process.mainModule.filename);
 
-function absPath(path) {
+function expand(path) {
     return pathop.join(WWW_DIR, path);
 }
 
-module.exports = { absPath, WWW_DIR };
+const CONFIG_PATH = expand('save/mods.json');
+
+module.exports = { expand, WWW_DIR, CONFIG_PATH };
