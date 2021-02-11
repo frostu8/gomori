@@ -3,7 +3,7 @@ const PatchManager = require('./PatchManager');
 const Crypto = require('./Crypto');
 const { defaultConfig } = require("../constants/defaults");
 
-const { expand, CONFIG_PATH } = require('../utils');
+const { expand, CONFIG_PATH } = require('pathutils');
 
 const fs = require("fs");
 const path = require("path/posix");

@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { expand } = require('../../utils');
+const { expand } = require('../pathutils');
 
 /**
  * A patch. All patches implement this class.

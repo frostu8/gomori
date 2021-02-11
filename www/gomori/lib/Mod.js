@@ -4,7 +4,6 @@ const ModFile = require('./ModFile');
 
 const pathop = require('path/posix');
 const posix = require('path/posix');
-const utils = require('./utils');
 
 // storage constants
 const PLUGINS_DIR = 'www/js/plugins';
