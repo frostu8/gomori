@@ -1,33 +1,23 @@
-const Patch = require('./Patch');
+const SteamPatch = require('./SteamPatch');
 
 const pathop = require('path');
 
 /**
  * A patch over a `.js` plugin file.
  */
-class PluginPatch extends Patch {
+class PluginPatch extends SteamPatch {
     constructor(path, data, modId) {
         super(path, data, modId);
 
         if (pathop.extname(path) !== '.js') 
             throw new Error(`Cannot patch non-plugin file ${path}!`);
 
-        // clip off extension
+        // get plugin basename
         this.basename = path.slice(0, -3);
-
-        // translate `.js` extension to `.OMORI`
-        this.path = this.basename + '.OMORI';
 
         // because plugins can only be accesssed in a single directory,
         // automatically route all plugin patches to the plugin directory.
         this.path = pathop.join('js/plugins', this.path);
-    }
-
-    patch(crypto) {
-        // use steam encryption
-        this.data = crypto.steamEncrypt(this.data);
-
-        super.patch(crypto);
     }
 
     postPatch(modLoader) {
