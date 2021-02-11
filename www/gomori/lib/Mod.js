@@ -2,7 +2,8 @@ const ZipModFs = require('./modfs/ZipModFs');
 const DirModFs = require('./modfs/DirModFs');
 const ModFile = require('./ModFile');
 
-const ospath = require('path/posix');
+const pathop = require('path/posix');
+const posix = require('path/posix');
 const utils = require('./utils');
 
 // storage constants
@@ -45,54 +46,31 @@ class Mod {
         }
     }
 
-    build() {
-        this.buildJs();
+    build(patcher) {
+        this.buildPlugins(patcher);
     }
 
     /**
      * Build all plugin files.
      */
-    buildJs() {
+    buildPlugins(patcher) {
         const jsFiles = this.meta.files?.plugins;
 
         if (jsFiles) {
-            for (let path of jsFiles) {
+            for (const path of jsFiles) {
                 const dir = this.modFs.listDir(path);
 
                 if (dir) {
                     // this is a directory
-                    this.jsFiles = dir.map(file => {
-                        return this.buildSingleFile(
-                            ospath.join(path, file),
-                            utils.replaceExt(ospath.join(PLUGINS_DIR, file), '.OMORI')
-                        );
-                    });
+                    dir.forEach(file => patcher.patchPlugin(
+                        file, this.modFs.getFile(posix.join(path, file))));
                 } else {
                     // this is a single file
-                    this.jsFiles.push(this.buildSingleFile(
-                        path, 
-                        utils.replaceExt(ospath.join(PLUGINS_DIR, ospath.basename(path)), '.OMORI')
-                    ));
+                    patcher.patchPlugin(
+                        pathop.basename(path), this.modFs.getFile(path));
                 }
             }
         }
-    }
-
-    buildSingleFile(modPath, patchPath) {
-        const modFile = new ModFile(modPath, patchPath);
-
-        modFile.build(this.modFs);
-
-        return modFile;
-    }
-
-    patch() {
-        // patch js files
-        this.jsFiles.forEach(file => {
-            file.patch(this.modLoader.crypto);
-
-            this.modLoader.plugins.push(this._genPluginMeta(file));
-        });
     }
 
     // IMPLEMENT MORE THINGS

@@ -4,6 +4,8 @@ const ospath = require('path/posix');
  * A mod filesystem is responsible for allowing access to the mod's contents.
  * Because a mod can be a zip *or* a directory, it is important to be able to
  * abstract those possibilities for easier programming.
+ *
+ * Mod filesystem accesses should always be posix-style paths.
  */
 class ModFs {
     /**

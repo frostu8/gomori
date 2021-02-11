@@ -1,4 +1,5 @@
 const Mod = require("./Mod");
+const PatchManager = require('./PatchManager');
 const Crypto = require('./Crypto');
 const { defaultConfig } = require("../constants/defaults");
 const { exists, read, write, readDir } = require("../utils/fs");
@@ -40,6 +41,8 @@ class ModLoader {
 
 		this.mods = [];
         this.modsDir = path.join(path.dirname(process.mainModule.filename), 'mods');
+
+        this.patchManager = new PatchManager();
 	}
 
 	/**
@@ -132,7 +135,12 @@ class ModLoader {
 	buildMods() {
 		for (const mod of this.mods) {
 			try {
-				mod.build();
+                // create patcher
+                const patcher = this.patchManager.patcher(mod.id);
+
+				mod.build(patcher);
+
+                this.patchManager.applyPatcher(patcher);
 			} catch (err) {
 				alert(`Failed to build mod "${mod.id}": ${err.stack}`);
 			}
@@ -152,13 +160,7 @@ class ModLoader {
 	}
 
 	patchMods() {
-		for (const mod of this.mods) {
-			try {
-                mod.patch();
-			} catch (err) {
-				alert(`Failed to patch mod "${mod.id}": ${err.stack}`);
-			}
-		}
+        this.patchManager.patch(this);
 	}
 
 	get config() {
