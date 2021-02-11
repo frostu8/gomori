@@ -163,6 +163,20 @@ class ModLoader {
         this.patchManager.patch(this);
 	}
 
+    // mod accessors
+    
+    /**
+     * Get a mod by its `id`.
+     *
+     * @param {string} id - The mod's id.
+     * 
+     * @returns {Mod|null} - The mod that was found. Returns `null` if no mod
+     * was found
+     */
+    get(id) {
+        return this.mods.find(mod => mod.id === id);
+    }
+
 	get config() {
 		if (this._config) return this._config;
 

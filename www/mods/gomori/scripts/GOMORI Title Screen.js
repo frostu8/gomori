@@ -6,7 +6,7 @@ Scene_OmoriTitleScreen.prototype.createVersionText = function() {
 	let padding = 4;
 	this._modVersion.position.set(0, 32);
 	this._modVersion.bitmap.fontSize = 24;
-	const gomoriVersion = $modLoader.mods.get("gomori").meta.version;
+	const gomoriVersion = $modLoader.get("gomori").meta.version;
 	this._modVersion.bitmap.drawText(`GOMORI V${gomoriVersion}`, padding ,padding , this._modVersion.bitmap.width, 16, "left");
 }
 
