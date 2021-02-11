@@ -1,4 +1,5 @@
-const { ZipModFs, DirModFs } = require('./modfs');
+const ZipModFs = require('./modfs/ZipModFs');
+const DirModFs = require('./modfs/DirModFs');
 const ModFile = require('./ModFile');
 
 const ospath = require('path/posix');
