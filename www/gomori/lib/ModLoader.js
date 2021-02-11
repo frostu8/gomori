@@ -1,7 +1,7 @@
 const Mod = require("./Mod");
 const PatchManager = require('./PatchManager');
 const Crypto = require('./Crypto');
-const { defaultConfig } = require("../constants/defaults");
+const { DEFAULT_CONFIG } = require("./defaults");
 
 const { expand, CONFIG_PATH } = require('./pathutils');
 
@@ -181,7 +181,7 @@ class ModLoader {
 		if (this._config) return this._config;
 
 		if (!fs.existsSync(CONFIG_PATH)) 
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaultConfig));
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG));
 		this._config = JSON.parse(fs.readFileSync(CONFIG_PATH).toString());
 		if (!this._config._basilFiles) this._config._basilFiles = [];
 		return this._config;
